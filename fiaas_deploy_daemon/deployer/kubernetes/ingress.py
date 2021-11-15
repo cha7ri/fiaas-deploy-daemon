@@ -240,11 +240,12 @@ class IngressTls(object):
     def __init__(self, config):
         self._use_ingress_tls = config.use_ingress_tls
         self._cert_issuer = config.tls_certificate_issuer
+        self._disable_tls_for_domain_suffixes = config.disable_tls_for_domain_suffixes
         self._shortest_suffix = sorted(config.ingress_suffixes, key=len)[0] if config.ingress_suffixes else None
         self.enable_deprecated_tls_entry_per_host = config.enable_deprecated_tls_entry_per_host
 
     def apply(self, ingress, app_spec, hosts, issuer_type, use_suffixes=True):
-        if self._should_have_ingress_tls(app_spec):
+        if self._should_have_ingress_tls(app_spec,hosts):
             tls_annotations = {}
             if self._cert_issuer or app_spec.ingress_tls.certificate_issuer:
                 issuer = app_spec.ingress_tls.certificate_issuer if app_spec.ingress_tls.certificate_issuer else self._cert_issuer
@@ -279,11 +280,18 @@ class IngressTls(object):
                 LOG.error("Failed to generate a short name to use as Common Name")
         return hosts
 
-    def _should_have_ingress_tls(self, app_spec):
+    def _should_have_ingress_tls(self, app_spec, hosts):
         if self._use_ingress_tls == 'disabled' or app_spec.ingress_tls.enabled is False:
             return False
+        elif app_spec.ingress_tls.enabled is True:
+            return True
         else:
-            return self._use_ingress_tls == 'default_on' or app_spec.ingress_tls.enabled is True
+            #Check if any ingress host match or part of atleast one domain suffix that shoudln't have tls 
+            for suffix in self._disable_tls_for_domain_suffixes:
+                for host in hosts:
+                    if host == suffix or host.endswith("." + suffix):
+                        return False
+            return self._use_ingress_tls == 'default_on'
 
     def _generate_short_host(self, app_spec):
         h = hashlib.sha1()
