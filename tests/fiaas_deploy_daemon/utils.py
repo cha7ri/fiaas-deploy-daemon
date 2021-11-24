@@ -298,7 +298,7 @@ class KindWrapper(object):
                 "log_dumper": self.dump_logs,
             }
             plog("Waiting for container {} with name {} to become ready".format(self._container.id, self.name))
-            wait_until(self._endpoint_ready(config_port, "kubernetes-ready"), "kubernetes ready", patience=180)
+           # wait_until(self._endpoint_ready(config_port, "kubernetes-ready"), "kubernetes ready", patience=1)
             return result
         except Exception:
             self.dump_logs()
@@ -343,6 +343,7 @@ class KindWrapper(object):
         self._container.reload()
         ip = self._container.attrs["NetworkSettings"]["IPAddress"]
         ports = self._container.attrs["NetworkSettings"]["Ports"]
+        plog(ports)
         config_port = ports["10080/tcp"][-1]["HostPort"]
         api_port = ports["8443/tcp"][-1]["HostPort"]
         return ip, api_port, config_port

@@ -127,29 +127,45 @@ class TestE2E(object):
     def fdd(self, request, kubernetes, service_type, k8s_version, use_docker_for_e2e):
         args, port, ready = self.prepare_fdd(request, kubernetes, k8s_version, use_docker_for_e2e, service_type)
         try:
-            daemon = subprocess.Popen(args, stdout=sys.stderr, env=merge_dicts(os.environ, {"NAMESPACE": "default"}))
-            time.sleep(1)
-            if daemon.poll() is not None:
-                pytest.fail("fiaas-deploy-daemon has crashed after startup, inspect logs")
-            self.wait_until_fdd_ready(k8s_version, kubernetes, ready)
+            daemon=self.start_fdd(args,port,ready,k8s_version,kubernetes)
             yield "http://localhost:{}/fiaas".format(port)
         finally:
             self._end_popen(daemon)
+        
+            
 
     @pytest.fixture(scope="module")
     def fdd_service_account(self, request, kubernetes_per_app_service_account, k8s_version, use_docker_for_e2e):
         args, port, ready = self.prepare_fdd(request, kubernetes_per_app_service_account, k8s_version,
                                              use_docker_for_e2e, "ClusterIP", service_account=True)
         try:
-            daemon = subprocess.Popen(args, stdout=sys.stderr, env=merge_dicts(os.environ, {"NAMESPACE": "default"}))
-            time.sleep(1)
-            if daemon.poll() is not None:
-                pytest.fail("fiaas-deploy-daemon has crashed after startup, inspect logs")
-            self.wait_until_fdd_ready(k8s_version, kubernetes_per_app_service_account, ready)
+            daemon=self.start_fdd(args,port,ready,k8s_version,kubernetes_per_app_service_account)
             yield "http://localhost:{}/fiaas".format(port)
         finally:
             self._end_popen(daemon)
 
+    @pytest.fixture(scope="module")
+    def fdd_disable_tls_for_doamin_suffixes(self, request, kubernetes, service_type, k8s_version, use_docker_for_e2e):
+        args, port, ready = self.prepare_fdd(request, kubernetes, k8s_version, use_docker_for_e2e, service_type,disable_tls_for_doamin_suffixes=True)
+        self.start_fdd(args,ready,port,k8s_version,kubernetes)
+        yield "http://localhost:{}/fiaas".format(port)
+
+
+    def start_fdd(self,args,ready,port,k8s_version,kubernetes):
+        try:
+            daemon = subprocess.Popen(args, stdout=sys.stdout, stderr=sys.stderr, env=merge_dicts(os.environ, {"NAMESPACE": "default"}))
+            time.sleep(1)
+            print(daemon)
+            if daemon.poll() is not None:
+                pytest.fail("fiaas-deploy-daemon has crashed after startup, inspect logs")
+            self.wait_until_fdd_ready(k8s_version, kubernetes, ready)
+            yield "http://localhost:{}/fiaas".format(port)
+        except:
+            pytest.fail("error happend")
+        finally:
+            self._end_popen(daemon)
+
+    
     def wait_until_fdd_ready(self, k8s_version, kubernetes, ready):
         wait_until(ready, "web-interface healthy", RuntimeError, patience=PATIENCE)
         if crd_supported(k8s_version):
@@ -157,8 +173,7 @@ class TestE2E(object):
                 crd_available(kubernetes, timeout=TIMEOUT),
                 "CRD available", RuntimeError, patience=PATIENCE
             )
-
-    def prepare_fdd(self, request, kubernetes, k8s_version, use_docker_for_e2e, service_type, service_account=False):
+    def prepare_fdd(self, request, kubernetes, k8s_version, use_docker_for_e2e, service_type, service_account=False, disable_tls_for_doamin_suffixes=False):
         port = get_unbound_port()
         cert_path = os.path.dirname(kubernetes["api-cert"])
         docker_args = use_docker_for_e2e(request, cert_path, service_type, k8s_version, port,
@@ -179,11 +194,14 @@ class TestE2E(object):
             "--secret-init-containers", "parameter-store=PARAM_STORE_IMAGE",
             "--tls-certificate-issuer-type-overrides", "use-issuer.example.com=certmanager.k8s.io/issuer",
             "--use-ingress-tls", "default_off",
+            
         ]
         if service_account:
             args.append("--enable-service-account-per-app")
         if crd_supported(k8s_version):
             args.append("--enable-crd-support")
+        if disable_tls_for_doamin_suffixes:
+            args.append(["--tls-certificate-issuer-disable-for-domain-suffixes", "test.example.com"])
         args = docker_args + args
 
         def ready():
@@ -459,7 +477,7 @@ class TestE2E(object):
         with kind_logger_per_app_service_account():
             self.run_crd_deploy(custom_resource_definition_service_account, service_type, service_account=True)
 
-    @pytest.mark.usefixtures("fdd", "k8s_client")
+    @pytest.mark.usefixtures("fdd_disable_tls_for_doamin_suffixes", "k8s_client")
     @pytest.mark.parametrize("input, expected", [
         ("multiple_ingress", {
             "v3-data-examples-multiple-ingress": "e2e_expected/multiple_ingress1.yml",

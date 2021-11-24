@@ -14,10 +14,17 @@ ARGS=(
 '--client-cert' "$CLIENT_CERT"
 '--client-key' "$CLIENT_KEY"
 '--service-type' 'ClusterIP'
-'--ingress-suffix' "$(minikube ip).xip.io"
+'--ingress-suffix' "xip.io"
 '--environment' 'test'
 '--datadog-container-image' 'datadog/docker-dd-agent:12.2.5172-alpine'
 '--enable-crd-support'
+#'--tls-certificate-issuer-type-overrides' "$(minikube ip).int.xip.io=cert-manager.k8s.io/issuer"
+'--use-ingress-tls' 'default_on'
+#'--tls-certificate-issuer' "letsencrypt-prod"
+#'--disable-tls-for-domain-suffixes' 'int.xip.io'
+'--tls-certificate-issuer-disable-for-domain-suffixes' 'xip.io'
+'--tls-certificate-issuer-disable-for-domain-suffixes' 'foo.example.com'
+
 )
 
 (set -x; fiaas-deploy-daemon "${ARGS[@]}")

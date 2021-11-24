@@ -41,3 +41,17 @@ spec:
       liveness:
         http:
           path: /
+    ingress:
+    - host: ann.foo.example.com
+      annotations:
+        kubernetes.io/ingress.class: nginx-public
+        issuer.type: someissuer 
+    - host: ann.sub.example.com
+      annotations:
+        kubernetes.io/ingress.class: nginx-public
+
+    - host: foo.example.com
+    - host: bar.example.com
+    - host: foo.bar.example.com
+    - host: other.cloud.com
+    - host: sub.foo.example.com
